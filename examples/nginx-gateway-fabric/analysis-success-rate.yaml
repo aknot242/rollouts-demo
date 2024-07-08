@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: success-rate
+spec:
+  args:
+  - name: namespace
+  - name: service-name
+  - name: service-port
+  metrics:
+  - name: success-rate
+    interval: 10s
+    initialDelay: 30s
+    successCondition: "result[0] > 0.90"
+    failureLimit: 3
+    provider:
+      prometheus:
+        address: http://prometheus-server.prometheus
+        query: >+
+          sum(
+            rate(nginx_gateway_fabric_upstream_server_responses{upstream="{{args.namespace}}_{{args.service-name}}_{{args.service-port}}",code!~"[4-5].*"}[60s]))
+            /
+            sum(rate(nginx_gateway_fabric_upstream_server_responses{upstream="{{args.namespace}}_{{args.service-name}}_{{args.service-port}}"}[60s])
+          )

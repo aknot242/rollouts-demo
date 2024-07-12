@@ -32,13 +32,13 @@ spec:
         - pause: {}
         - setWeight: 40
         - pause:
-            duration: 10s
+            duration: 1m
         - setWeight: 60
         - pause:
-            duration: 10s
+            duration: 1m
         - setWeight: 80
         - pause:
-            duration: 10s
+            duration: 1m
   template:
     metadata:
       labels:

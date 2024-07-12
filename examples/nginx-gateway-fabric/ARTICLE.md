@@ -2,7 +2,7 @@
 
 Recently, the Kubernetes community celebrated the platform's 10th year in existence. Inarguably, it has come a long way since its early days at Google and has established itself as the de-facto platform for delivering cloud-native modern applications.
 
-In your application modernization journey, you have no doubt made use of containerization technology, automated your build and deployment pipelines with CI/CD tooling of GitOps solutions to handle your infrastructure in code as you already do your applications. With all the capabilities in Kubernetes, augmented by the rich ecosystem of related open-source tools and contingents, there are still inherent complexities that remain unsolved for you. For instance, you may find it relatively easy to stand up your first production cluster, deploy your applications to it, and start accepting live traffic to it. But, how is it performing? What are users experiencing when they consume your applications and APIs? Do you have enough capacity for organic growth or seasonal surges related to your apps? When you inevitably need to update your application, how do you do so while minimizing disruption?
+In your application modernization journey, you have no doubt made use of containerization technology, automated your build and deployment pipelines with CI/CD tooling of GitOps solutions to handle your infrastructure in code as you already do your applications. With all the capabilities in Kubernetes, augmented by the rich ecosystem of related open-source tools and contingents, there are still inherent complexities that remain unsolved for you. For instance, you may find it relatively easy to set up your first production cluster, deploy your applications to it, and start accepting live traffic to it. But, how is it performing? What are users experiencing when they consume your applications and APIs? Do you have enough capacity for organic growth or seasonal surges related to your apps? When you inevitably need to update your application, how do you do so while minimizing disruption?
 
 ## Deployment Patterns
 
@@ -25,7 +25,7 @@ While the capability to execute these application rollouts in a vendor-neutral w
 
 ## Progressive Delivery
 
-Progressive delivery has emerged as a preferred approach for modern applications for a number of reasons. It can be a means to orchestrate a gradual feature rollout for an application. It can help reduce risk by deploying changes only to a subset or test group of users first. You can also use progressive delivery to gather early feedback of a new application deployment and other use cases. This isn't meant to be an exhaustive list of use cases, but merely an introduction.
+Progressive delivery has emerged as a preferred approach for modern applications for a number of reasons. It can be a means to orchestrate a gradual feature rollout for an application. It can help reduce risk by deploying changes only to a subset or test group of users first. You can also use progressive delivery to gather early feedback on a new application deployment and other use cases. This isn't meant to be an exhaustive list of use cases, but merely an introduction.
 
 ## A Solution
 
@@ -68,7 +68,7 @@ Local tools needed:
 - [kubeconfig](https://kubernetes.io/docs/tasks/tools/#kubectl) (set up with a config valid for your test cluster)
 - [git](https://git-scm.com/downloads)
 
-We will begin by installing NGINX Gateway Fabric. We will be using the Plus edition in order to take advantage of its extended metrics and seamless configuration reload capabilities.
+We will begin by installing NGINX Gateway Fabric. We will be using the Plus edition to take advantage of its extended metrics and seamless configuration reload capabilities.
 
 ### Installation
 
@@ -78,7 +78,7 @@ We will begin by installing NGINX Gateway Fabric. We will be using the Plus edit
     kubectl create namespace nginx-gateway
     ```
 
-1. Create a Secret in order to pull the NGF container from the F5 private registry. The secret is based on the contents of the trial JWT from MyF5. If you do not have a trial JWT, you can request one [here](https://www.f5.com/trials/free-trial-connectivity-stack-kubernetes).
+1. Create a Secret to pull the NGF container from the F5 private registry. The secret is based on the contents of the trial JWT from MyF5. If you do not have a trial JWT, you can request one [here](https://www.f5.com/trials/free-trial-connectivity-stack-kubernetes).
 
     ```shell
     kubectl create secret docker-registry nginx-plus-registry-secret --docker-server=private-registry.nginx.com --docker-username=`cat the_full_path_to_you_jwt_here` --docker-password=none -n nginx-gateway
@@ -196,6 +196,12 @@ Now that our cluster services are in place, we will now use NGF and Argo Rollout
     kubectl apply -f rollout.yaml
     ```
 
+1. Use `kubectl` to verify that there are 5 replicas of the application running:
+
+    ```shell
+    kubectl get pods
+    ```
+
 ### Monitoring the Stable Rollout
 
 1. Now that the application is fully deployed, use Argo Rollouts' `kubectl` plugin to observe the initial state of the application. Open a new shell window, and run the following:
@@ -208,7 +214,7 @@ Now that our cluster services are in place, we will now use NGF and Argo Rollout
 
     You should see the following:
 
-    ![initial rollout](images/initial-rollout.png)
+    ![initial rollout](images/initial-rollout-blue.png)
 
     In the image above, you will observe several things (in no particular order):
 
@@ -231,7 +237,9 @@ Now that our cluster services are in place, we will now use NGF and Argo Rollout
 
     > Note: In the grid, each blue square represents a connection being made through NGF to one of the demo pods hosted in the rollout deployment. Since we are using the `rollouts-demo:blue` image, the service responds with that color. The area at the bottom represents the portion of responses by a particular color over time.
 
-### Initiating the Canary Rollout
+    > Important: Certain browsers like Chrome will put a tab to sleep if the tab is not the actively selected one. As a result, if you switch to another tab, the HTTP calls to the demo app will cease until the tab has been activated once again.
+
+### Initiating a Canary Rollout
 
 Now that we have a stable version of our rollout running, we need to introduce an application change. The demo project contains different variants of the color-producing services, so we'll leverage these so you can easily see what is going on. To update the deployment, you can either update the `rollout.yaml` file to use a different image, or use the Argo Rollouts CLI. We'll do the latter.
 
@@ -243,20 +251,19 @@ Now that we have a stable version of our rollout running, we need to introduce a
 
 1. Switch to the shell window that is monitoring the rollout status. You should see something similar to the following:
 
-    ![canary rollout yellow](images/canary-rollout.png)
+    ![canary rollout yellow](images/canary-rollout-yellow.png)
 
     > Note: The canary rollout has begun, and has paused at the 30% traffic stage, as directed by the rollout rules in `rollout.yaml`.
 
 1. Switch back to your browser and you should see something similar to this:
 
-    ![stable rollout ui blue](images/ui-yellow.png)
+    ![canary rollout ui yellow](images/ui-yellow.png)
 
 1. Switch back to the rollout status shell window.
 
     ![alt text](images/yellow-analysis.png)
 
-
-    > Note: The AnalysisRun is continually running. Why? Since this canary rollout has only *partially* progressed, Argo Rollouts continues to monitor the results of the Prometheus query configured in the AnalysisTemplate resource (in `analysis-success-rate.yaml`) to ensure there are no 4xx-5xx errors present in the NGINX upstream metrics produced for this canary service. This analysis template is configured to run every 30 seconds. This rollout has a rule set to pause indefinitely at 30% traffic. How do we complete the rollout?
+    > Note: The AnalysisRun is continually running. Why? Since this canary rollout has only *partially* progressed, Argo Rollouts continues to monitor the results of the Prometheus query configured in the AnalysisTemplate resource (in `analysis-success-rate.yaml`) to ensure there are no 4xx-5xx HTTP errors present in the NGINX upstream metrics produced for this canary service. This analysis template is configured to run every minute. This rollout has a rule set to pause indefinitely at 30% traffic. How do we complete the rollout?
 
 1. Switch to your original shell and run the following to continue (or, "promote") the rollout:
 
@@ -264,19 +271,38 @@ Now that we have a stable version of our rollout running, we need to introduce a
     kubectl argo rollouts promote rollouts-demo
     ```
 
+    > Note: In the shell window that the kubectl rollouts plugin is running, you will see the rollout progress over the next several minutes - gradually shifting traffic over to the canary service represented in the demo app. Once complete, the canary service will become the new stable release.
 
+1. Once the rollout completes, you should see that the ui of the demo application has shifted entirely over to using the yellow service.
 
+    ![canary rollout yellow complete ui](images/canary-rollout-yellow-complete-ui.png)
 
+1. Switch to the kubectl rollouts plugin window. You will notice that there are 2 replicasets with 5 pods each - one representing the new stable release, and another representing the previous release. Since all the traffic is being routed to the new stable release, why do we need to keep the previous pods around? If it were determined that there is an undetected issue with the stable release, you can switch back to the previous revision of the application without having to wait for new pods to initialize first.
 
+    ![rollout complete](images/canary-rollout-yellow-complete.png)
 
+### Simulate a Failed Rollout
 
+We have just seen what an ideal rollout looks like. What about a rollout where failures are detected by the AnalysisTemplate based on Prometheus metrics? We will deploy a new Canary version of this app by selecting an image that intentionally throws HTTP errors.
 
+1. In the original shell window you opened, use the CLI to start a Canary rollout of the `rollouts-demo:bad-red` image:
 
+    ```shell
+    kubectl argo rollouts set image rollouts-demo "*=argoproj/rollouts-demo:bad-red"
+    ```
 
+1. Switch back to your browser and you should see something similar to this
+
+    ![canary rollout ui red](images/canary-rollout-red-ui.png)
+
+1. Wait at least a minute, and you should see something like this:
+
+    ![canary rollout ui red rollback](images/canary-rollout-red-rollback-ui.png)
+
+    > Note: You will see a portion of red service responses for about a minute, then reverts back to 100% green. Why? Look at the kubectl argo rollouts plugin to see what is going on. You may observe that the AnalysisRun has failed at least one time, triggering Argo Rollouts to perform an automaticc rollback to the last successful rollout version. Cool, right?
+
+    ![failing canary rollout red](images/canary-rollout-red-rollback.png)
 
 ## Conclusion
 
-- Summarize the benefits of adopting progressive delivery using NGINX Gateway Fabric and Argo Rollouts.
-- Encourage readers to consider these technologies for their Kubernetes deployments to achieve smoother deployments, improved user satisfaction, and faster iteration cycles.
-
-By framing the problem statement around the challenges of modern application deployment and transitioning into the capabilities of NGINX Gateway Fabric and Argo Rollouts for progressive delivery, you can effectively guide your readers towards understanding the benefits and implementation considerations of these technologies.
+This was only a taste of what can be accomplished with Argo Rollouts and NGINX Gateway Fabric. However, I hope you have been able to witness the benefits of adopting progressive delivery patters using tools such as these. I would encourage you to further explore what you are able to accomplish in your own environments.

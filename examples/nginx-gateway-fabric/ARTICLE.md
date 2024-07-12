@@ -56,11 +56,9 @@ There are a number of benefits of using NGINX Gateway Fabric with Argo Rollouts:
 
 Without further ado, let's set this up for a test drive. You are going to need a Kubernetes cluster, ideally [version 1.25 or greater](https://github.com/nginxinc/nginx-gateway-fabric#technical-specifications) so we can take advantage of features in the latest version of the Gateway API. While the installation could be performed entirely by script or using something like Argo CD, we will be performing each step manually for learning purposes.
 
-Here's the overall architecture of the demo environment:
+Here's the overall architecture of the demo environment. We will deploy and configure everything you see here step-by-step.
 
-TODO: Diagram here
-
-> Note: It is inadvisable to perform the demo steps in a production Kubernetes cluster without prior validation in a lesser environment.
+![demo diagram](images/demo-diagram.png)
 
 Local tools needed:
 
@@ -69,6 +67,8 @@ Local tools needed:
 - [git](https://git-scm.com/downloads)
 
 We will begin by installing NGINX Gateway Fabric. We will be using the Plus edition to take advantage of its extended metrics and seamless configuration reload capabilities.
+
+> Note: It is not recommended to perform the demo steps in a production Kubernetes cluster without prior validation in a less-critical environment.
 
 ### Installation
 

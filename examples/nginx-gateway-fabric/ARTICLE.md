@@ -1,14 +1,27 @@
 # Powering Progressive Deployment in Kubernetes
 
-Recently, the Kubernetes community celebrated the platform's 10th year in existence. Inarguably, it has come a long way since its early days at Google and has established itself as the de-facto platform for delivering cloud-native modern applications.
+Recently, the Kubernetes community celebrated the platform's 10th year in existence. Inarguably, it has come a long way since its early days at Google and has established itself as the de-facto platform for delivering cloud-native modern applications. However, will it intrinsically solve all your delivery challenges out-of-the-box? In this article, we will be leveraging ecosystem tooling to improve the quality and frequency of your application deployments in Kubernetes.
 
-In your application modernization journey, you have no doubt made use of containerization technology, automated your build and deployment pipelines with CI/CD tooling of GitOps solutions to handle your infrastructure in code as you already do your applications. With all the capabilities in Kubernetes, augmented by the rich ecosystem of related open-source tools and contingents, there are still inherent complexities that remain unsolved for you. For instance, you may find it relatively easy to set up your first production cluster, deploy your applications to it, and start accepting live traffic to it. But, how is it performing? What are users experiencing when they consume your applications and APIs? Do you have enough capacity for organic growth or seasonal surges related to your apps? When you inevitably need to update your application, how do you do so while minimizing disruption?
+In your application modernization journey, you may have discovered there are still inherent complexities that remain unsolved for you. For instance, you may find it relatively easy to set up your first production cluster, deploy your applications to it, and start accepting live traffic to it. You may wonder:
+
+- How is your application performing?
+- What are users experiencing when they consume your applications and APIs?
+- When you inevitably need to update your application, how do you do so while minimizing disruption?
+
+If you can identify with at least one of the above concerns, you aren't alone. By the end of this article, you will have an understanding of how to:
+
+- **Enhance Traffic Management:** The ability to make dynamic routing adjustments during deployments.
+- **Increased Availability and Reliability:** How to achieve high availability and reliability through intelligent traffic handling and failover mechanisms.
+- **Improved User Experience:** Leverage progressive delivery patterns to minimize downtime.
+- **Efficient Rollback Mechanisms:** Easily roll back changes in the event of issues, ensuring quick recovery and minimal impact on users.
+
+To achieve the above, we need to understand and employ proven patterns that assist us in improving our delivery pipelines.
 
 ## Deployment Patterns
 
-Fortunately, as software development itself has design patterns - repeatable blueprints for successfully and sustainably building applications, there also exist patterns for the deployment and operation of them. You may have heard of "Blue-green", "Canary deployments", and "A/B Testing". These are examples of deployment patterns; designed to route and shape application traffic over time. While these deployment patterns seem promising, until the last several years, you had been left to your own devices (no pun intended) to implement them. However, proxies such as NGINX, Envoy and service meshes such as Istio have been able to assist in the execution of these patterns as application rollout strategies. While these solutions fit neatly into a Kubernetes environment and can route and process traffic into the applications residing in the cluster, many of them have their own specific behaviors and differences in configuration.
+The practice of software development has benefited from a wealth of "design patterns" - repeatable blueprints for successfully and sustainably building applications. Ostensibly, there also exist patterns for the deployment and operation of these applications. You may have heard of deployment patterns such as "Blue-green", "Canary deployments", and "A/B Testing" which help route and shape application traffic over time. While these deployment patterns seem promising, until the last several years, you had been left to your own devices (no pun intended) to implement them. However, proxies such as NGINX, Envoy and service meshes such as Istio have been able to assist in the execution of these patterns as application rollout strategies. While these solutions fit neatly into a Kubernetes environment and can route and process traffic into the applications residing in the cluster, many of them have their own specific behaviors and differences in configuration.
 
-Fortunately, the Kubernetes community recognized a flourishing of specific implementations to perform these functions natively. As a result, the Kubernetes [SIG-NETWORK](https://github.com/kubernetes/community/tree/master/sig-network) community released a common specification for modern application delivery services in Kubernetes called the Gateway API. Gateway API is an official Kubernetes project focused on L4 and L7 routing in Kubernetes. This project represents the next generation of Kubernetes Ingress, Load Balancing, and Service Mesh APIs. From the outset, it has been designed to be generic, expressive, and role-oriented.
+Fortunately, the Kubernetes community responded to this shared need in an effort to ultimately unify such disparate implementations moving forward. Specifically, the [SIG-NETWORK](https://github.com/kubernetes/community/tree/master/sig-network) community released a common specification for modern application delivery services in Kubernetes called [Gateway API](https://gateway-api.sigs.k8s.io/). Gateway API is an official Kubernetes project focused on L4 and L7 routing in Kubernetes. This project represents the next generation of Kubernetes Ingress, Load Balancing, and Service Mesh APIs. From the outset, it has been designed to be generic, expressive, and role-oriented.
 
 The overall resource model focuses on 3 separate personas and corresponding resources that they are expected to manage:
 
@@ -16,45 +29,42 @@ The overall resource model focuses on 3 separate personas and corresponding reso
 
 We will dig into using some of these resources later in this article.
 
-This new specification has been supported by a number of projects and vendors, most notably the NGINX Gateway Fabric for Kubernetes.
+This new specification has been supported by a number of projects and vendors, most notably the NGINX Gateway Fabric for Kubernetes (NGF).
 At KubeCon 2023, F5 NGINX [unveiled](https://www.f5.com/company/blog/nginx/watch-nginx-gateway-fabric-at-kubecon-north-america-2023) 1.0 of NGF, supporting traffic splitting patterns such as Canary and Blue-green intrinsically.
 
 ![NGF high-level architecture](images/ngf-high-level.png "NGF high-level architecture")
 
-While the capability to execute these application rollouts in a vendor-neutral way has been a desire of the community, what about the observability considerations mentioned earlier? How can we be assured that our applications are working after deploying new versions? What if we want to orchestrate the progressive introduction of application changes rather than a "big-bang" deployment? And if the deployment isn't successful, how might we know if we need to roll back?
+While the capability to execute these application rollouts in a vendor-neutral way is a win for the community, some challenges remain:
+
+- How can we be assured that our applications are working after deploying new versions?
+- What if we want to orchestrate the progressive introduction of application changes rather than a "big-bang" deployment?
+- If my deployment isn't successful, how will I know if I need to roll back?
+
+We are getting there. Read on...
 
 ## Progressive Delivery
 
-Progressive delivery has emerged as a preferred approach for modern applications for a number of reasons. It can be a means to orchestrate a gradual feature rollout for an application. It can help reduce risk by deploying changes only to a subset or test group of users first. You can also use progressive delivery to gather early feedback on a new application deployment and other use cases. This isn't meant to be an exhaustive list of use cases, but merely an introduction.
+Progressive delivery has emerged as a preferred approach for modern applications for a number of reasons. It can be a means to orchestrate a gradual feature rollout for an application. It can help reduce risk by deploying changes only to a subset or test group of users first. You can also use progressive delivery to gather early feedback on a new application deployment and other use cases. This is not meant to be an exhaustive list of use cases, but merely an introduction.
 
 ## A Solution
 
-NGINX is the most widely used web server and application proxy in the world. It has been very popular in the Kubernetes world, as the de-facto Ingress controller for a number of years. With the aforementioned NGINX Gateway Fabric packaging, the ubiquitous API Gateway, load balancer and security enforcement solution has minted a new lease on seamless integration with Kubernetes.
+NGINX is the most widely used API gateway, application proxy, and web server in the world. It has been very popular in the Kubernetes community, as the de-facto Ingress Controller. With NGINX's Gateway Fabric packaging, this workhorse has renewed its reputation for seamless integration with Kubernetes.
 
-How do we orchestrate progressive delivery? There is more we need...
+How do we orchestrate progressive delivery? There is more we need.
 
 Our friends at the Argo Project (famous for their GitOps platform, ArgoCD) released Argo Rollouts back in 2019, focused on this progressive delivery problem. Argo Rollouts enables the orchestration of Canary deployments, Blue-green deployments, and experimentation with traffic splitting.
 
 ![Canary deployments](images/canary-deployments.png "Canary Deployments (credit:argoproj.io)")
 
-However, the ability to execute the traffic shaping portion of application rollouts with popular proxies and service meshes required in-tree source code which added complexity, and slowed down contributions. As you might imagine, the amount of effort required to develop and maintain all these vendor and implementation-specific extensions has been a chore to say the least.
+However, in order for ingress proxies and service meshes to execute the traffic shaping portion of application rollouts, directly extending the Argo Rollouts code was necessary. As a consequence, this added complexity, and slowed down contributions. As you might imagine, the amount of effort required to develop and maintain all these vendor and implementation-specific extensions has been a chore to say the least.
 
-Fortunately, on April 5, 2023, the Argo Project [announced](https://blog.argoproj.io/argo-rollouts-1-5-release-candidate-2bd93720e411) that a plugin system for Argo Rollouts had been developed, enabling future extensibility of the product without friction to contributing described above. This was a welcome addition, and would set up the Argo Project for yet another important innovation...
+Fortunately, on April 5, 2023, the Argo Project [announced](https://blog.argoproj.io/argo-rollouts-1-5-release-candidate-2bd93720e411) that a plugin system for Argo Rollouts had been developed. This would enable future extensibility without having to contribute to the core Argo Rollouts project itself. This was a welcome addition, and would set up the Argo Project for yet another important innovation.
 
 To much celebration, the Argo Project [announced](https://blog.argoproj.io/argo-rollouts-now-supports-version-1-0-of-the-kubernetes-gateway-api-acc429729e42) on June 20, 2024 that Argo Rollouts now supports ingresses, gateways and service meshes that implement the Kubernetes Gateway API for progressive delivery. Unsurprisingly, NGINX Gateway Fabric, powered by the most popular proxy in the world, is one of the [supported providers](https://gateway-api.sigs.k8s.io/implementations/).
 
-## Better Together
-
-There are a number of benefits of using NGINX Gateway Fabric with Argo Rollouts:
-
-- **Enhanced Traffic Management:** NGINX Gateway Fabric provides robust traffic management capabilities, allowing dynamic routing adjustments during deployments.
-- **Increased Availability and Reliability:** This combination ensures high availability and reliability through intelligent traffic handling and failover mechanisms.
-- **Improved User Experience:** Progressive delivery with NGINX Gateway Fabric and Argo Rollouts minimizes downtime and reduces the risk of introducing bugs or issues to end-users.
-- **Efficient Rollback Mechanisms:** Ease of rolling back changes in case of issues, ensuring quick recovery and minimal impact on users.
-
 ## The Details
 
-Without further ado, let's set this up for a test drive. You are going to need a Kubernetes cluster, ideally [version 1.25 or greater](https://github.com/nginxinc/nginx-gateway-fabric#technical-specifications) so we can take advantage of features in the latest version of the Gateway API. While the installation could be performed entirely by script or using something like Argo CD, we will be performing each step manually for learning purposes.
+Without further ado, let's set this solution stack up for a test drive. You are going to need a Kubernetes cluster, ideally [version 1.25 or greater](https://github.com/nginxinc/nginx-gateway-fabric#technical-specifications) so we can take advantage of features in the latest version of the Gateway API. While the installation could be performed entirely by script or using something like Argo CD, we will be performing each step manually for learning purposes.
 
 Here's the overall architecture of the demo environment. We will deploy and configure everything you see here step-by-step.
 
@@ -102,7 +112,7 @@ We will begin by installing NGINX Gateway Fabric. We will be using the Plus edit
     kubectl wait --timeout=5m -n nginx-gateway deployment/ngf-nginx-gateway-fabric --for=condition=Available
     ```
 
-1. We will be using Prometheus metrics to inform Argo Rollouts of the state of our application's health during rollouts. Add the Prometheus community helm chart, then update the Helm repo:
+1. We will use Prometheus metrics to inform Argo Rollouts of the state of our application's health during rollouts. Add the Prometheus community helm chart, then update the Helm repo:
 
     ```shell
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
@@ -183,6 +193,9 @@ Now that our cluster services are in place, we will now use NGF and Argo Rollout
     kubectl apply -f stable-service.yaml
     kubectl apply -f canary-service.yaml
     ```
+
+    ***Why do we need two different services that contain the same app selector?***
+    When implementing a Canary deployment, Argo Rollouts requires two different Kubernetes services: A "stable" service, and a "canary" service. The "stable" service will direct traffic to the initial deployment of the application. In subsequent (or "canary") deployments, Argo Rollouts will transparently configure the "canary" service to use the endpoints exposed by the pods referenced in the new deployment. NGF will use both of these services to split traffic between these two defined services based on the Argo Rollout rules.
 
 1. Now we will deploy the `AnalysisTemplate` resource, provided by Argo Rollouts. This resource contains the rules to assess a deployment's health, and how to interpret this data. In this demo, we will be using Prometheus query to examine the canary service's upstream pods for the absence of 4xx and 5xx HTTP response codes as an indication of its health.
 
@@ -299,10 +312,10 @@ We have just seen what an ideal rollout looks like. What about a rollout where f
 
     ![canary rollout ui red rollback](images/canary-rollout-red-rollback-ui.png)
 
-    > Note: You will see a portion of red service responses for about a minute, then reverts back to 100% green. Why? Look at the kubectl argo rollouts plugin to see what is going on. You may observe that the AnalysisRun has failed at least one time, triggering Argo Rollouts to perform an automaticc rollback to the last successful rollout version. Cool, right?
+    > Note: You will see a portion of red service responses for about a minute, then reverts back to 100% green. Why? Look at the kubectl argo rollouts plugin to see what is going on. You may observe that the AnalysisRun has failed at least one time, triggering Argo Rollouts to perform an automatic rollback to the last successful rollout version. Cool, right?
 
     ![failing canary rollout red](images/canary-rollout-red-rollback.png)
 
 ## Conclusion
 
-This was only a taste of what can be accomplished with Argo Rollouts and NGINX Gateway Fabric. However, I hope you have been able to witness the benefits of adopting progressive delivery patters using tools such as these. I would encourage you to further explore what you are able to accomplish in your own environments.
+This was only a taste of what can be accomplished with Argo Rollouts and NGINX Gateway Fabric. However, I hope you have witnessed the benefits of adopting progressive delivery patters using tools such as these. I would encourage you to further explore what you are able to accomplish in your own environments.

@@ -93,19 +93,25 @@ If you instead wish to use the NGINX Open Source edition of NGF, you will need t
 1. Create a Secret to pull the NGF container from the F5 private registry. The secret is based on the contents of the trial JWT from MyF5. If you do not have a trial JWT, you can request one [here](https://www.f5.com/trials/free-trial-connectivity-stack-kubernetes).
 
     ```shell
-    kubectl create secret docker-registry nginx-plus-registry-secret --docker-server=private-registry.nginx.com --docker-username=`cat the_full_path_to_you_jwt_here` --docker-password=none -n nginx-gateway
+    kubectl create secret docker-registry nginx-plus-registry-secret --docker-server=private-registry.nginx.com --docker-username=`cat the_full_path_to_your_jwt_here` --docker-password=none -n nginx-gateway
+    ```
+
+1. Create a Secret that will contain the NGINX Plus license file. This will be from the same JWT file as used in the previous step:
+
+    ```shell
+    kubectl create secret generic nplus-license --from-literal=license.jwt=`cat the_full_path_to_your_jwt_here` -n nginx-gateway
     ```
 
 1. The Kubernetes Gateway API is not included in clusters by default. We need to install its Custom Resource Definitions (CRDs) in order to use it:
 
     ```shell
-    kubectl kustomize "https://github.com/nginxinc/nginx-gateway-fabric/config/crd/gateway-api/standard?ref=v1.3.0" | kubectl apply -f -
+    kubectl kustomize "https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard?ref=v2.2.1" | kubectl apply -f -
     ```
 
 1. Next, we will install NGF via its Helm chart:
 
     ```shell
-    helm install ngf oci://ghcr.io/nginxinc/charts/nginx-gateway-fabric --set nginx.image.repository=private-registry.nginx.com/nginx-gateway-fabric/nginx-plus --set nginx.plus=true --set serviceAccount.imagePullSecret=nginx-plus-registry-secret -n nginx-gateway --version 1.3.0
+    helm install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric --set nginx.image.repository=private-registry.nginx.com/nginx-gateway-fabric/nginx-plus --set nginx.plus=true --set nginx.imagePullSecret=nginx-plus-registry-secret -n nginx-gateway --version 2.2.1
     ```
 
 1. Run the following command to wait until NGF has been verified as deployed:
@@ -124,7 +130,7 @@ If you instead wish to use the NGINX Open Source edition of NGF, you will need t
 1. Install Prometheus on your cluster in its own namespace:
 
     ```shell
-    helm install prometheus prometheus-community/prometheus -n prometheus --create-namespace --set server.global.scrape_interval=15s
+    helm install prometheus prometheus-community/prometheus -n prometheus --create-namespace --set server.global.scrape_interval=15s --set server.global.evaluation_interval=15s
     ```
 
 1. Create a namespace for Argo Rollouts, and install it using manifests from the project's GitHub repo:
@@ -136,10 +142,12 @@ If you instead wish to use the NGINX Open Source edition of NGF, you will need t
 
 1. Install the Argo Rollouts CLI using the [instructions](https://argoproj.github.io/argo-rollouts/installation/#kubectl-plugin-installation) for your client platform.
 
-1. Install the Gateway API Plugin for Argo Rollouts:
+1. Create a `gateway-plugin.yaml` file based on the instructions on the [Argo Rollouts Gateway API plugin](https://rollouts-plugin-trafficrouter-gatewayapi.readthedocs.io/en/latest/installation/#installing-the-plugin-via-https) page.
+
+1. Install the Gateway API Plugin for Argo Rollouts from the yaml file you created in the previous step:
 
     ```shell
-    kubectl apply -f gateway-plugin.yml -n argo-rollouts
+    kubectl apply -f gateway-plugin.yaml -n argo-rollouts
     ```
 
 1. Restart the Argo Rollouts controller so that it detects the presence of the plugin.
@@ -151,7 +159,7 @@ If you instead wish to use the NGINX Open Source edition of NGF, you will need t
 1. Then, check the controller logs. You should see a line for loading the plugin:
 
     ```shell
-    time="XXX" level=info msg="Downloading plugin argoproj-labs/gatewayAPI from: https://github.com/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi/releases/download/v0.2.0/gateway-api-plugin-linux-amd64"
+    time="XXX" level=info msg="Downloading plugin argoproj-labs/gatewayAPI from: https://github.com/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi/releases/download/v0.8.0/gateway-api-plugin-linux-arm64"
     time="YYY" level=info msg="Download complete, it took 7.792426599s"
     ```
 
@@ -199,6 +207,31 @@ Now that our cluster services are in place, we will now use NGF and Argo Rollout
     ***Why do we need two different services that contain the same app selector?***
     When implementing a Canary deployment, Argo Rollouts requires two different Kubernetes services: A "stable" service, and a "canary" service. The "stable" service will direct traffic to the initial deployment of the application. In subsequent (or "canary") deployments, Argo Rollouts will transparently configure the "canary" service to use the endpoints exposed by the pods referenced in the new deployment. NGF will use both of these services to split traffic between these two defined services based on the Argo Rollout rules.
 
+1. The argo-rollouts service account needs the ability to be able to view and modify HTTPRoutes as well as its existing permissions. Edit the `argo-rollouts` cluster role to add the following permissions to `rules:`:
+
+    ```yaml
+    - apiGroups:
+      - gateway.networking.k8s.io
+      resources:
+      - httproutes
+      verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+    ```
+
+1. Additionally, the argo-rollouts service account needs the ability to be able to create ConfigMaps as well as its existing permissions. Edit the `argo-rollouts` cluster role to add the following permissions:
+
+    ```yaml
+    - apiGroups: [""]:
+      resources:
+      - configmaps
+      verbs:
+      - create
+    ```
+
 1. Now we will deploy the `AnalysisTemplate` resource, provided by Argo Rollouts. This resource contains the rules to assess a deployment's health, and how to interpret this data. In this demo, we will be using Prometheus query to examine the canary service's upstream pods for the absence of 4xx and 5xx HTTP response codes as an indication of its health.
 
     ```shell
@@ -237,11 +270,11 @@ Now that our cluster services are in place, we will now use NGF and Argo Rollout
     - There are 8 steps to this progressive rollout. Refer to the `rollout.yaml` file to see the configured stages.
     - You should see that the rollout is `Progressing`, awaiting a canary rollout.
 
-1. Open a new shell window, and set up a port forward to the NGF pod's NGINX container:
+1. Open a new shell window, and set up a port forward to the NGF pod's NGINX container that is hosting the gateway:
 
     ```shell
-    NGINX_POD=`kubectl get pods --selector=app.kubernetes.io/name=nginx-gateway-fabric -n nginx-gateway -o=name`
-    kubectl port-forward $NGINX_POD -n nginx-gateway 8080:80
+    NGINX_POD=`kubectl get pods --selector=app.kubernetes.io/name=rollouts-demo-gateway-nginx -o=name`
+    kubectl port-forward $NGINX_POD 8080:80
     ```
 
     > Note: In a production scenario, we would not have used a port forward. Rather, we would have likely used a `Service` type `LoadBalancer` to reach the NGF instance. However, this requires additional setup, and varies greatly depending on where your cluster is hosted.
@@ -311,7 +344,7 @@ We have just seen what an ideal rollout looks like. What about a rollout where f
     ![canary rollout ui red](images/canary-rollout-red-ui.png)
 
 1. Wait at least a minute, and you should see something like this:
-
+˜˜
     ![canary rollout ui red rollback](images/canary-rollout-red-rollback-ui.png)
 
     > Note: You will see a portion of red service responses for about a minute, then reverts back to 100% yellow. Why? Look at the kubectl argo rollouts plugin to see what is going on. You may observe that the AnalysisRun has failed at least one time, triggering Argo Rollouts to perform an automatic rollback to the last successful rollout version. Cool, right?
@@ -320,4 +353,4 @@ We have just seen what an ideal rollout looks like. What about a rollout where f
 
 ## Conclusion
 
-This was only a taste of what can be accomplished with Argo Rollouts and NGINX Gateway Fabric. However, I hope you have witnessed the benefits of adopting progressive delivery patters using tools such as these. I would encourage you to further explore what you are able to accomplish in your own environments.
+This was only a taste of what can be accomplished with Argo Rollouts and NGINX Gateway Fabric. However, I hope you have witnessed the benefits of adopting progressive delivery patterns using tools such as these. I would encourage you to further explore what you are able to accomplish in your own environments.
